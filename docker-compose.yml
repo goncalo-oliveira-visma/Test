@@ -1,0 +1,20 @@
+version: "3.9"
+
+services:
+  web:
+    build: .
+    container_name: therapieland_web
+    ports:
+      - "8000:8000"
+    volumes:
+      - sqlite_data:/app/therapieland
+    environment:
+      - PYTHONDONTWRITEBYTECODE=1
+      - PYTHONUNBUFFERED=1
+    command: >
+      sh -c "python manage.py migrate &&
+             python manage.py collectstatic --noinput &&
+             gunicorn therapieland.wsgi:application --bind 0.0.0.0:8000"
+
+volumes:
+  sqlite_data:
