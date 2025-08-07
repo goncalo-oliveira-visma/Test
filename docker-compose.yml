@@ -7,7 +7,7 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - sqlite_data:/app/therapieland
+      - sqlite_data:/app/therapieland/db_data
     environment:
       - PYTHONDONTWRITEBYTECODE=1
       - PYTHONUNBUFFERED=1
