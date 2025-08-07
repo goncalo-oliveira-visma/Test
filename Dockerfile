@@ -22,7 +22,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # Create a volume mount point for SQLite DB file
-VOLUME ["/app/db.sqlite3"]
+VOLUME ["/therapieland/db.sqlite3"]
 
 # Collect static files (if any)
 RUN python manage.py collectstatic --noinput
