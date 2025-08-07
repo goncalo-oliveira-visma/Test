@@ -8,9 +8,11 @@ class FHIRValidator:
     @staticmethod
     def validate_patient(data: Dict[str, Any]) -> PatientType:
         try:
+            fhir_data = data.copy()
+            fhir_data['resourceType'] = 'Patient'
+
             # Convert to FHIR Patient resource and validate
-            fhir_patient = FHIRPatient(**data)
-            fhir_patient.resource_type = "Patient"
+            fhir_patient = FHIRPatient(**fhir_data)
 
             # Validate required fields
             if not fhir_patient.name:

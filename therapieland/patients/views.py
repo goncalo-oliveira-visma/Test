@@ -1,10 +1,11 @@
 from typing import Dict, Any
 
-from drf_spectacular import openapi, serializers
+from drf_spectacular import openapi
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema, OpenApiResponse, OpenApiExample, OpenApiParameter
 from rest_framework.permissions import IsAuthenticated
 from rest_framework_simplejwt.authentication import JWTAuthentication
+from rest_framework import serializers
 
 from .permissions import IsFHIRAPIUser
 from .serializer import PatientSerializer
@@ -114,14 +115,12 @@ bundle_example = {
 @authentication_classes([JWTAuthentication])
 @permission_classes([IsAuthenticated, IsFHIRAPIUser])
 def create_patient(request):
-    """Create a new patient record"""
     try:
-        # Validate FHIR compliance
-        fhir_patient = FHIRValidator.validate_patient(request.data)
+        FHIRValidator.validate_patient(request.data)
 
         serializer = PatientSerializer(data=request.data)
         if serializer.is_valid():
-            patient = serializer.save()
+            serializer.save()
             return Response(serializer.data, status=status.HTTP_201_CREATED)
 
         return Response(
@@ -149,13 +148,8 @@ def create_patient(request):
 )
 @api_view(['GET'])
 def list_patients(request):
-    """
-    GET /fhir/Patient
-    Retrieve a list of all patients
-    """
     patients = Patient.objects.all()
 
-    # Build FHIR Bundle response
     bundle_data = {
         "resourceType": "Bundle",
         "id": "patient-search-results",
@@ -205,10 +199,6 @@ def list_patients(request):
 )
 @api_view(['GET'])
 def get_patient(request, patient_id):
-    """
-    GET /fhir/Patient/{id}
-    Retrieve details of a specific patient by ID
-    """
     try:
         patient = get_object_or_404(Patient, id=patient_id)
         serializer = PatientSerializer(patient)
@@ -252,10 +242,6 @@ def get_patient(request, patient_id):
 )
 @api_view(['PUT'])
 def update_patient(request, patient_id):
-    """
-    PUT /fhir/Patient/{id}
-    Update the details of a specific patient
-    """
     try:
         patient = get_object_or_404(Patient, id=patient_id)
         serializer = PatientSerializer(patient, data=request.data, partial=True)
@@ -298,10 +284,6 @@ def update_patient(request, patient_id):
 )
 @api_view(['DELETE'])
 def delete_patient(request, patient_id):
-    """
-    DELETE /fhir/Patient/{id}
-    Delete a specific patient record
-    """
     try:
         patient = get_object_or_404(Patient, id=patient_id)
         patient.delete()

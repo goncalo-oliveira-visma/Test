@@ -1,7 +1,10 @@
+from django.contrib.auth.models import User, Group
 from django.test import TestCase
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
+from rest_framework_simplejwt.tokens import RefreshToken
+
 from .models import Patient
 import uuid
 from datetime import date
@@ -14,7 +17,21 @@ class PatientAPITestCase(APITestCase):
     """Test case for the Patient API endpoints"""
 
     def setUp(self):
-        """Set up test data"""
+        # Create a user and add to fhir_api_users group
+        self.user = User.objects.create_user(
+            username='testuser',
+            email='test@example.com',
+            password='testpassword'
+        )
+
+        self.fhir_group, created = Group.objects.get_or_create(name='fhir_api_users')
+        self.user.groups.add(self.fhir_group)
+
+        refresh = RefreshToken.for_user(self.user)
+        self.access_token = str(refresh.access_token)
+
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {self.access_token}')
+
         self.valid_patient_data = {
             "resourceType": "Patient",
             "active": True,
@@ -48,7 +65,6 @@ class PatientAPITestCase(APITestCase):
             }]
         }
 
-        # Create a test patient
         self.test_patient = Patient.objects.create(
             family_name="Doe",
             given_names=["Jane"],
@@ -57,7 +73,6 @@ class PatientAPITestCase(APITestCase):
         )
 
     def test_create_patient_valid_data(self):
-        """Test creating a patient with valid data"""
         url = reverse('create_patient')
         response = self.client.post(url, self.valid_patient_data, format='json')
 
@@ -67,7 +82,6 @@ class PatientAPITestCase(APITestCase):
         self.assertEqual(response.data['gender'], 'male')
 
     def test_create_patient_invalid_data(self):
-        """Test creating a patient with invalid data"""
         invalid_data = {
             "resourceType": "Patient",
             "gender": "invalid_gender",  # Invalid gender value
@@ -78,8 +92,15 @@ class PatientAPITestCase(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
+    def test_create_patient_without_auth(self):
+        self.client.credentials()
+
+        url = reverse('create_patient')
+        response = self.client.post(url, self.valid_patient_data, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
     def test_get_patient_list(self):
-        """Test retrieving list of patients"""
         url = reverse('list_patients')
         response = self.client.get(url)
 
@@ -89,7 +110,6 @@ class PatientAPITestCase(APITestCase):
         self.assertTrue(isinstance(response.data['entry'], list))
 
     def test_get_patient_detail(self):
-        """Test retrieving a specific patient"""
         url = reverse('get_patient', kwargs={'patient_id': self.test_patient.id})
         response = self.client.get(url)
 
@@ -98,7 +118,6 @@ class PatientAPITestCase(APITestCase):
         self.assertEqual(response.data['name'][0]['family'], 'Doe')
 
     def test_get_patient_invalid_id(self):
-        """Test retrieving a patient with invalid ID"""
         invalid_id = uuid.uuid4()
         url = reverse('get_patient', kwargs={'patient_id': invalid_id})
         response = self.client.get(url)
@@ -106,7 +125,6 @@ class PatientAPITestCase(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
     def test_update_patient(self):
-        """Test updating a patient"""
         update_data = {
             "resourceType": "Patient",
             "name": [{
@@ -124,18 +142,25 @@ class PatientAPITestCase(APITestCase):
         self.assertEqual(response.data['name'][0]['family'], 'Doe-Updated')
 
     def test_delete_patient(self):
-        """Test deleting a patient"""
-        url = reverse('delete_patient', kwargs={'patient_id': self.test_patient.id})
+        patient = Patient.objects.create(
+            family_name="ToDelete",
+            given_names=["Test"],
+            gender="male",
+            birth_date="1990-01-01"
+        )
+
+        self.assertEqual(Patient.objects.filter(id=patient.id).count(), 1)
+
+        url = reverse('delete_patient', kwargs={'patient_id': patient.id})
         response = self.client.delete(url)
 
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
-        self.assertEqual(Patient.objects.filter(id=self.test_patient.id).count(), 0)
+        self.assertEqual(Patient.objects.filter(id=patient.id).count(), 0)
+
 
 class PatientModelTestCase(TestCase):
-    """Test case for the Patient model"""
 
     def test_patient_creation(self):
-        """Test creating a patient model instance"""
         patient = Patient.objects.create(
             family_name="Smith",
             given_names=["John"],
@@ -143,13 +168,13 @@ class PatientModelTestCase(TestCase):
             birth_date="1990-01-01"
         )
         self.assertTrue(isinstance(patient, Patient))
-        self.assertEqual(str(patient), "John Smith")
+        self.assertEqual(str(patient), "Will Smith")
 
     def test_patient_fhir_compliance(self):
         """Test FHIR compliance of patient data"""
         patient = Patient.objects.create(
             family_name="Smith",
-            given_names=["John"],
+            given_names=["Will"],
             gender="male",
             birth_date="1990-01-01",
             telecom_phone="+1-555-123-4567",
@@ -162,23 +187,20 @@ class PatientModelTestCase(TestCase):
             address_country="USA"
         )
 
-        # Test FHIR required fields
         self.assertTrue(hasattr(patient, 'id'))
         self.assertTrue(hasattr(patient, 'resource_type'))
         self.assertEqual(patient.resource_type, 'Patient')
 
-        # Test FHIR datatypes
         self.assertTrue(isinstance(patient.id, uuid.UUID))
         self.assertTrue(isinstance(patient.birth_date, date))
         self.assertTrue(isinstance(patient.given_names, list))
 
-class PatientSerializerTestCase(TestCase):
-    """Test case for the Patient serializers"""
 
+class PatientSerializerTestCase(TestCase):
     def setUp(self):
         self.patient_attributes = {
             "family_name": "Smith",
-            "given_names": ["John"],
+            "given_names": ["Will"],
             "gender": "male",
             "birth_date": "1990-01-01",
             "telecom_phone": "+1-555-123-4567",
@@ -187,11 +209,9 @@ class PatientSerializerTestCase(TestCase):
         self.patient = Patient.objects.create(**self.patient_attributes)
 
     def test_patient_serialization(self):
-        """Test patient serialization to FHIR format"""
         serializer = PatientSerializer(self.patient)
         data = serializer.data
 
-        # Test FHIR Resource requirements
         self.assertEqual(data['resourceType'], 'Patient')
         self.assertTrue('id' in data)
         self.assertTrue('name' in data)
@@ -199,7 +219,6 @@ class PatientSerializerTestCase(TestCase):
         self.assertTrue('birthDate' in data)
 
     def test_patient_deserialization(self):
-        """Test patient deserialization from FHIR format"""
         fhir_data = {
             "resourceType": "Patient",
             "name": [{

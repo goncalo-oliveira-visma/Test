@@ -68,7 +68,7 @@ class PatientSerializer(serializers.ModelSerializer):
             ],
             "telecom": [],
             "gender": instance.gender,
-            "birthDate": instance.birth_date.isoformat(),
+            "birthDate": instance.birth_date,
             "address": [],
             "identifier": []
         }

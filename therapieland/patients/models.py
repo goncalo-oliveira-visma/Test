@@ -1,5 +1,4 @@
 from django.db import models
-from django.core.validators import RegexValidator
 import uuid
 
 
@@ -70,7 +69,7 @@ class Patient(models.Model):
         ],
         blank=True
     )
-    address_line = models.JSONField(default=list)  # Array of address lines
+    address_line = models.JSONField(default=list)
     address_city = models.CharField(max_length=100, blank=True)
     address_district = models.CharField(max_length=100, blank=True)
     address_state = models.CharField(max_length=100, blank=True)
