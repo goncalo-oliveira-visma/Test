@@ -5,7 +5,7 @@ services:
     build: .
     container_name: therapieland_web
     ports:
-      - "8000:8000"
+      - "8001:8000"
     volumes:
       - sqlite_data:/app/therapieland/db_data
     environment:
